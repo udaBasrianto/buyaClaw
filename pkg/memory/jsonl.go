@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -92,15 +94,27 @@ func (s *JSONLStore) metaPath(key string) string {
 }
 
 // sanitizeKey converts a session key to a safe filename component.
-// Mirrors pkg/session.sanitizeFilename so that migration paths match.
-// Replaces ':' with '_' (session key separator) and '/' and '\' with '_'
-// so composite IDs (e.g. Telegram forum "chatID/threadID", Slack "channel/thread_ts")
-// do not create subdirectories or break on Windows.
+//
+// Legacy keys (plain strings without ':', '/', or '\') are used as-is so that
+// existing session files on disk are still found after an upgrade.
+//
+// Structured keys (canonical "sk_v1_..." opaque keys and legacy "agent:..."
+// keys) are hashed with SHA-256 to produce a collision-free, filesystem-safe
+// filename. Simple character replacement (e.g. ':' → '_') is NOT used because
+// two distinct keys can map to the same replacement string, causing different
+// sessions to share the same file.
+//
+// The hash is prefixed with "h_" so the resulting filename is always
+// distinguishable from a plain legacy key.
 func sanitizeKey(key string) string {
-	s := strings.ReplaceAll(key, ":", "_")
-	s = strings.ReplaceAll(s, "/", "_")
-	s = strings.ReplaceAll(s, "\\", "_")
-	return s
+	// Fast path: keys without special characters are already safe filenames
+	// and are kept verbatim for backward compatibility with existing files.
+	if !strings.ContainsAny(key, ":/\\") {
+		return key
+	}
+	// Hash structured keys to guarantee collision-free filenames.
+	sum := sha256.Sum256([]byte(key))
+	return "h_" + hex.EncodeToString(sum[:])
 }
 
 // readMeta loads the metadata file for a session.

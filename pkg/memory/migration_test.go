@@ -274,7 +274,7 @@ func TestMigrateFromJSON_ColonInKey(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 
-	// File is named telegram_123 (sanitized), but the key inside is telegram:123.
+	// File is named telegram_123 (old sanitized name), but the key inside is telegram:123.
 	writeJSONSession(t, sessionsDir, "telegram_123.json", jsonSession{
 		Key:      "telegram:123",
 		Messages: []providers.Message{{Role: "user", Content: "from telegram"}},
@@ -302,15 +302,16 @@ func TestMigrateFromJSON_ColonInKey(t *testing.T) {
 		t.Errorf("content = %q", history[0].Content)
 	}
 
-	// In the file-based store, "telegram:123" and "telegram_123" both
-	// sanitize to the same filename, so they share storage. This is
-	// expected — the colon-to-underscore mapping is a one-way function.
+	// With hash-based sanitization, "telegram:123" and "telegram_123" now map
+	// to DIFFERENT filenames, so they are independent sessions.
 	history2, err := store.GetHistory(ctx, "telegram_123")
 	if err != nil {
 		t.Fatalf("GetHistory: %v", err)
 	}
-	if len(history2) != 1 {
-		t.Errorf("expected 1 (same file), got %d", len(history2))
+	// telegram_123 has no special characters so it maps to itself — a separate
+	// empty session, not the same file as telegram:123.
+	if len(history2) != 0 {
+		t.Errorf("expected 0 (separate session), got %d", len(history2))
 	}
 }
 
@@ -398,7 +399,7 @@ func TestMigrateFromJSON_SkipsMetaJSONFiles(t *testing.T) {
 		t.Fatalf("SetSummary: %v", summaryErr)
 	}
 
-	metaPath := filepath.Join(sessionsDir, "agent_main_pico_direct_pico_test.meta.json")
+	metaPath := filepath.Join(sessionsDir, sanitizeKey("agent:main:pico:direct:pico:test")+".meta.json")
 	if _, statErr := os.Stat(metaPath); statErr != nil {
 		t.Fatalf("meta file missing before migration: %v", statErr)
 	}

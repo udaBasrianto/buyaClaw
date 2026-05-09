@@ -617,10 +617,18 @@ func TestColonInKey(t *testing.T) {
 		t.Fatalf("expected 1, got %d", len(history))
 	}
 
-	// Verify the file is named with underscore.
-	jsonlFile := filepath.Join(store.dir, "telegram_123.jsonl")
+	// Verify the file is named with the hash prefix (collision-free).
+	// Keys containing ':' are hashed to avoid collisions between e.g.
+	// "telegram:123" and "telegram_123".
+	jsonlFile := filepath.Join(store.dir, sanitizeKey("telegram:123")+".jsonl")
 	if _, statErr := os.Stat(jsonlFile); statErr != nil {
 		t.Errorf("expected file %s to exist: %v", jsonlFile, statErr)
+	}
+
+	// Verify that "telegram:123" and "telegram_123" now map to DIFFERENT files
+	// (the whole point of the hash-based sanitization).
+	if sanitizeKey("telegram:123") == sanitizeKey("telegram_123") {
+		t.Errorf("sanitizeKey collision: 'telegram:123' and 'telegram_123' map to the same filename %q", sanitizeKey("telegram:123"))
 	}
 }
 

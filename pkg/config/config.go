@@ -405,14 +405,14 @@ type SlackSettings struct {
 }
 
 type MatrixSettings struct {
-	Homeserver         string       `json:"homeserver"                     yaml:"-"                      env:"PICOCLAW_CHANNELS_MATRIX_HOMESERVER"`
-	UserID             string       `json:"user_id"                        yaml:"-"                      env:"PICOCLAW_CHANNELS_MATRIX_USER_ID"`
-	AccessToken        SecureString `json:"access_token,omitzero"          yaml:"access_token,omitempty" env:"PICOCLAW_CHANNELS_MATRIX_ACCESS_TOKEN"`
+	Homeserver         string       `json:"homeserver"                     yaml:"-"                            env:"PICOCLAW_CHANNELS_MATRIX_HOMESERVER"`
+	UserID             string       `json:"user_id"                        yaml:"-"                            env:"PICOCLAW_CHANNELS_MATRIX_USER_ID"`
+	AccessToken        SecureString `json:"access_token,omitzero"          yaml:"access_token,omitempty"       env:"PICOCLAW_CHANNELS_MATRIX_ACCESS_TOKEN"`
 	DeviceID           string       `json:"device_id,omitempty"            yaml:"-"`
 	JoinOnInvite       bool         `json:"join_on_invite"                 yaml:"-"`
 	MessageFormat      string       `json:"message_format,omitempty"       yaml:"-"`
 	CryptoDatabasePath string       `json:"crypto_database_path,omitempty" yaml:"-"`
-	CryptoPassphrase   string       `json:"crypto_passphrase,omitempty"    yaml:"-"`
+	CryptoPassphrase   SecureString `json:"crypto_passphrase,omitzero"     yaml:"crypto_passphrase,omitempty"  env:"PICOCLAW_CHANNELS_MATRIX_CRYPTO_PASSPHRASE"`
 }
 
 type LINESettings struct {
@@ -538,10 +538,10 @@ type DevicesConfig struct {
 }
 
 type VoiceConfig struct {
-	ModelName         string `json:"model_name,omitempty"         env:"PICOCLAW_VOICE_MODEL_NAME"`
-	TTSModelName      string `json:"tts_model_name,omitempty"     env:"PICOCLAW_VOICE_TTS_MODEL_NAME"`
-	EchoTranscription bool   `json:"echo_transcription"           env:"PICOCLAW_VOICE_ECHO_TRANSCRIPTION"`
-	ElevenLabsAPIKey  string `json:"elevenlabs_api_key,omitempty" env:"PICOCLAW_VOICE_ELEVENLABS_API_KEY"`
+	ModelName         string       `json:"model_name,omitempty"         env:"PICOCLAW_VOICE_MODEL_NAME"`
+	TTSModelName      string       `json:"tts_model_name,omitempty"     env:"PICOCLAW_VOICE_TTS_MODEL_NAME"`
+	EchoTranscription bool         `json:"echo_transcription"           env:"PICOCLAW_VOICE_ECHO_TRANSCRIPTION"`
+	ElevenLabsAPIKey  SecureString `json:"elevenlabs_api_key,omitzero"  yaml:"elevenlabs_api_key,omitempty" env:"PICOCLAW_VOICE_ELEVENLABS_API_KEY"`
 }
 
 // ModelConfig represents a model-centric provider configuration.

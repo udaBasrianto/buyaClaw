@@ -1288,7 +1288,9 @@ func (h *Handler) gatewayStatusData() map[string]any {
 
 		// Attach if we don't already track this PID.
 		if gateway.cmd == nil || gateway.cmd.Process == nil || gateway.cmd.Process.Pid != pidData.PID {
-			_ = attachToGatewayProcessLocked(pidData.PID, cfg)
+			if attachErr := attachToGatewayProcessLocked(pidData.PID, cfg); attachErr != nil {
+				logger.WarnC("gateway", fmt.Sprintf("Failed to attach to gateway process (PID %d): %v", pidData.PID, attachErr))
+			}
 		}
 
 		bootDefaultModel := gateway.bootDefaultModel
