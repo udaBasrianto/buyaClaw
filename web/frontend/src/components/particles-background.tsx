@@ -66,7 +66,7 @@ export function ParticlesBackground() {
       particlesLoaded={particlesLoaded}
       options={particlesOptions}
       style={{
-        position: "absolute",
+        position: "fixed",
         inset: 0,
         zIndex: 0,
         width: "100%",

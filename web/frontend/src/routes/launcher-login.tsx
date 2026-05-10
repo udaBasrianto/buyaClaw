@@ -80,9 +80,11 @@ function LauncherLoginPage() {
   }
 
   return (
-    <div className="bg-background text-foreground relative flex min-h-dvh flex-col overflow-hidden">
+    <div className="text-foreground relative flex min-h-dvh flex-col overflow-hidden">
       <ParticlesBackground />
-      <header className="border-border/50 relative z-10 flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
+
+      {/* Header — top right */}
+      <header className="fixed right-4 top-4 z-10 flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" aria-label="Language">
@@ -113,7 +115,8 @@ function LauncherLoginPage() {
         </Button>
       </header>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center p-4">
+      {/* Center — login card */}
+      <div className="relative z-10 flex min-h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md" size="sm">
           <CardHeader>
             <CardTitle>{t("launcherLogin.title")}</CardTitle>
