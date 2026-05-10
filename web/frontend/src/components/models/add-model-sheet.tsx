@@ -1,8 +1,9 @@
-import { IconLoader2, IconRefresh } from "@tabler/icons-react"
+import { IconLoader2, IconRefresh, IconSearch } from "@tabler/icons-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
+  type ModelDiscoveryItem,
   type ModelProviderOption,
   addModel,
   fetchAvailableModels,
@@ -109,10 +110,11 @@ export function AddModelSheet({
   const [serverError, setServerError] = useState("")
 
   // Auto-fetch model list state
-  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [availableModels, setAvailableModels] = useState<ModelDiscoveryItem[]>([])
   const [fetchingModels, setFetchingModels] = useState(false)
   const [modelFetchError, setModelFetchError] = useState<string | null>(null)
-  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [showModelTable, setShowModelTable] = useState(false)
+  const [modelSearch, setModelSearch] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const apiKeyPlaceholder = maskedSecretPlaceholder(
     form.apiKey,
@@ -161,6 +163,8 @@ export function AddModelSheet({
       setAvailableModels([])
       setModelFetchError(null)
       setFetchingModels(false)
+      setShowModelTable(false)
+      setModelSearch("")
     }
   }, [open])
 
@@ -189,6 +193,9 @@ export function AddModelSheet({
         } else {
           setAvailableModels(result.models ?? [])
           setModelFetchError(null)
+          if ((result.models ?? []).length > 0) {
+            setShowModelTable(true)
+          }
         }
       } catch {
         setModelFetchError("Failed to fetch models")
@@ -368,17 +375,16 @@ export function AddModelSheet({
               label={t("models.add.modelId")}
               hint={t("models.add.modelIdHint")}
             >
-              <div className="relative">
+              <div className="space-y-2">
+                {/* Input + refresh button */}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
                       value={form.model}
                       onChange={(e) => {
                         setField("model")(e)
-                        setShowModelDropdown(true)
+                        setModelSearch(e.target.value)
                       }}
-                      onFocus={() => setShowModelDropdown(true)}
-                      onBlur={() => setShowModelDropdown(false)}
                       placeholder={t("models.add.modelIdPlaceholder")}
                       className="font-mono text-sm"
                       aria-invalid={!!fieldErrors.model}
@@ -415,55 +421,44 @@ export function AddModelSheet({
                   )}
                 </div>
 
-                {/* Dropdown list */}
-                {showModelDropdown && availableModels.length > 0 && (
-                  <div className="border-border bg-popover absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border shadow-md">
-                    {availableModels
-                      .filter(
-                        (m) =>
-                          !form.model ||
-                          m.toLowerCase().includes(form.model.toLowerCase()),
-                      )
-                      .map((modelId) => (
-                        <button
-                          key={modelId}
-                          type="button"
-                          className="hover:bg-accent w-full px-3 py-2 text-left font-mono text-sm"
-                          onPointerDown={(e) => {
-                            // Prevent input onBlur from firing before we handle the click
-                            e.preventDefault()
-                          }}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, model: modelId }))
-                            setShowModelDropdown(false)
-                            if (fieldErrors.model) {
-                              setFieldErrors((prev) => ({ ...prev, model: undefined }))
-                            }
-                          }}
-                        >
-                          {modelId}
-                        </button>
-                      ))}
+                {/* Status line */}
+                {!fetchingModels && availableModels.length > 0 && !modelFetchError && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground text-xs">
+                      {availableModels.length} models available
+                    </p>
+                    <button
+                      type="button"
+                      className="text-primary text-xs underline-offset-2 hover:underline"
+                      onClick={() => setShowModelTable((v) => !v)}
+                    >
+                      {showModelTable ? "Hide list" : "Browse & select"}
+                    </button>
                   </div>
+                )}
+                {!fetchingModels && modelFetchError && (
+                  <p className="text-muted-foreground text-xs">
+                    ⚠ {modelFetchError} — type the model ID manually
+                  </p>
+                )}
+
+                {/* Model table */}
+                {showModelTable && availableModels.length > 0 && (
+                  <ModelTable
+                    models={availableModels}
+                    search={modelSearch}
+                    onSearch={setModelSearch}
+                    onSelect={(id) => {
+                      setForm((f) => ({ ...f, model: id }))
+                      setShowModelTable(false)
+                      if (fieldErrors.model) {
+                        setFieldErrors((prev) => ({ ...prev, model: undefined }))
+                      }
+                    }}
+                  />
                 )}
               </div>
 
-              {/* Status messages */}
-              {!fetchingModels && availableModels.length > 0 && !modelFetchError && (
-                <p className="text-muted-foreground text-xs">
-                  ✓ {availableModels.length} models available — click to select or type manually
-                </p>
-              )}
-              {!fetchingModels && modelFetchError && (
-                <p className="text-muted-foreground text-xs">
-                  ⚠ {modelFetchError} — you can still type the model ID manually
-                </p>
-              )}
-              {!fetchingModels && !modelFetchError && availableModels.length === 0 && form.apiBase.trim() && (
-                <p className="text-muted-foreground text-xs">
-                  No models found — type the model ID manually
-                </p>
-              )}
               {fieldErrors.model && (
                 <p className="text-destructive text-xs">{fieldErrors.model}</p>
               )}
@@ -663,5 +658,120 @@ export function AddModelSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ModelTable — searchable table for browsing and selecting a model
+// ---------------------------------------------------------------------------
+
+interface ModelTableProps {
+  models: ModelDiscoveryItem[]
+  search: string
+  onSearch: (v: string) => void
+  onSelect: (id: string) => void
+}
+
+function ModelTable({ models, search, onSearch, onSelect }: ModelTableProps) {
+  const filtered = models.filter((m) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      m.id.toLowerCase().includes(q) ||
+      (m.name ?? "").toLowerCase().includes(q) ||
+      (m.provider ?? "").toLowerCase().includes(q)
+    )
+  })
+
+  return (
+    <div className="border-border rounded-md border">
+      {/* Search bar */}
+      <div className="border-border flex items-center gap-2 border-b px-3 py-2">
+        <IconSearch className="text-muted-foreground h-4 w-4 shrink-0" />
+        <input
+          type="text"
+          className="bg-transparent w-full text-sm outline-none placeholder:text-muted-foreground"
+          placeholder="Search models..."
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          autoFocus
+        />
+        {search && (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs"
+            onClick={() => onSearch("")}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Table header */}
+      <div className="border-border bg-muted/40 grid grid-cols-[1fr_auto] border-b px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span>MODEL</span>
+        <span className="text-right">PROVIDER</span>
+      </div>
+
+      {/* Rows */}
+      <div className="max-h-72 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="text-muted-foreground px-3 py-6 text-center text-sm">
+            No models match "{search}"
+          </div>
+        ) : (
+          filtered.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className="hover:bg-accent/60 grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-border/40 px-3 py-3 text-left last:border-0"
+              onClick={() => onSelect(m.id)}
+            >
+              {/* Left: model name + badges */}
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate font-medium text-sm">
+                    {m.name || m.id}
+                  </span>
+                  {m.is_free && (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                      Free
+                    </span>
+                  )}
+                  {!m.is_free && m.price_prompt && m.price_prompt !== "Free" && (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                      {m.price_prompt} / 1M in
+                    </span>
+                  )}
+                </div>
+                {m.id !== m.name && m.name && (
+                  <span className="text-muted-foreground truncate font-mono text-xs">
+                    {m.id}
+                  </span>
+                )}
+                {m.context_length && m.context_length > 0 && (
+                  <span className="text-muted-foreground text-xs">
+                    {(m.context_length / 1000).toFixed(0)}K ctx
+                  </span>
+                )}
+              </div>
+
+              {/* Right: provider badge */}
+              {m.provider && (
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                  {m.provider}
+                </span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+
+      {filtered.length > 0 && (
+        <div className="text-muted-foreground border-t border-border/40 px-3 py-1.5 text-xs">
+          {filtered.length} of {models.length} models
+        </div>
+      )}
+    </div>
   )
 }

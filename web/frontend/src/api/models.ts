@@ -108,8 +108,19 @@ export async function setDefaultModel(
 }
 
 export interface AvailableModelsResponse {
-  models: string[]
+  models: ModelDiscoveryItem[]
   error?: string
+}
+
+export interface ModelDiscoveryItem {
+  id: string
+  name?: string
+  provider?: string
+  description?: string
+  context_length?: number
+  price_prompt?: string
+  price_output?: string
+  is_free?: boolean
 }
 
 export async function fetchAvailableModels(

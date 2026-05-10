@@ -7,15 +7,28 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const modelDiscoveryTimeout = 5 * time.Second
 
+// ModelDiscoveryItem is a rich model entry returned by the discovery endpoint.
+type ModelDiscoveryItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	Description string `json:"description,omitempty"`
+	ContextLen  int    `json:"context_length,omitempty"`
+	PricePrompt string `json:"price_prompt,omitempty"` // price per 1M tokens input (USD)
+	PriceOutput string `json:"price_output,omitempty"` // price per 1M tokens output (USD)
+	IsFree      bool   `json:"is_free,omitempty"`
+}
+
 // handleFetchAvailableModels fetches the list of models available from a
 // provider's API endpoint. Used by the Add Model form to populate the
-// Model Identifier dropdown automatically.
+// Model Identifier table automatically.
 //
 //	POST /api/models/available
 //	Body: { "provider": "openai", "api_base": "https://...", "api_key": "sk-..." }
@@ -34,28 +47,30 @@ func (h *Handler) handleFetchAvailableModels(w http.ResponseWriter, r *http.Requ
 	apiBase := strings.TrimRight(strings.TrimSpace(req.APIBase), "/")
 	apiKey := strings.TrimSpace(req.APIKey)
 
-	models, err := discoverModels(r.Context(), provider, apiBase, apiKey)
+	items, err := discoverModelItems(r.Context(), provider, apiBase, apiKey)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"models": []string{},
+			"models": []ModelDiscoveryItem{},
 			"error":  err.Error(),
 		})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"models": models,
+		"models": items,
 	})
 }
 
-// discoverModels fetches available model IDs from a provider's API.
-func discoverModels(ctx context.Context, provider, apiBase, apiKey string) ([]string, error) {
+// discoverModelItems fetches rich model info from a provider's API.
+func discoverModelItems(ctx context.Context, provider, apiBase, apiKey string) ([]ModelDiscoveryItem, error) {
 	ctx, cancel := context.WithTimeout(ctx, modelDiscoveryTimeout)
 	defer cancel()
 
 	switch provider {
 	case "ollama":
-		return discoverOllamaModels(ctx, apiBase)
+		return discoverOllamaModelItems(ctx, apiBase)
+	case "anthropic", "anthropic-messages", "anthropic_messages":
+		return discoverAnthropicModelItems(ctx, apiBase, apiKey)
 	case "openai", "openai-compat", "openai_compat",
 		"groq", "deepseek", "mistral", "together", "fireworks",
 		"perplexity", "anyscale", "openrouter", "novita",
@@ -63,20 +78,17 @@ func discoverModels(ctx context.Context, provider, apiBase, apiKey string) ([]st
 		"qwen", "volcengine", "zhipu", "minimax", "longcat",
 		"modelscope", "shengsuanyun", "lmstudio", "vllm",
 		"azure", "bedrock":
-		return discoverOpenAICompatibleModels(ctx, apiBase, apiKey)
-	case "anthropic", "anthropic-messages", "anthropic_messages":
-		return discoverAnthropicModels(ctx, apiBase, apiKey)
+		return discoverOpenAICompatibleModelItems(ctx, apiBase, apiKey)
 	default:
-		// Try OpenAI-compatible as fallback for unknown providers
 		if apiBase != "" {
-			return discoverOpenAICompatibleModels(ctx, apiBase, apiKey)
+			return discoverOpenAICompatibleModelItems(ctx, apiBase, apiKey)
 		}
 		return nil, fmt.Errorf("provider %q does not support automatic model discovery", provider)
 	}
 }
 
-// discoverOpenAICompatibleModels fetches models from a GET /models endpoint.
-func discoverOpenAICompatibleModels(ctx context.Context, apiBase, apiKey string) ([]string, error) {
+// discoverOpenAICompatibleModelItems fetches rich model info from GET /models.
+func discoverOpenAICompatibleModelItems(ctx context.Context, apiBase, apiKey string) ([]ModelDiscoveryItem, error) {
 	if apiBase == "" {
 		return nil, fmt.Errorf("api_base is required")
 	}
@@ -104,63 +116,94 @@ func discoverOpenAICompatibleModels(ctx context.Context, apiBase, apiKey string)
 		return nil, fmt.Errorf("endpoint returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1*1024*1024))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	// OpenAI format: { "data": [{ "id": "gpt-4" }, ...] }
-	var result struct {
+	// OpenRouter / OpenAI format:
+	// { "data": [{ "id": "openai/gpt-4", "name": "GPT-4", "pricing": {...}, ... }] }
+	var raw struct {
 		Data []struct {
-			ID string `json:"id"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			ContextLen  int    `json:"context_length"`
+			Pricing     *struct {
+				Prompt     string `json:"prompt"`
+				Completion string `json:"completion"`
+			} `json:"pricing"`
+			// Some providers use "models" key
 		} `json:"data"`
-		// Some providers use "models" instead of "data"
 		Models []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"models"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
 	seen := make(map[string]struct{})
-	var models []string
+	var items []ModelDiscoveryItem
 
-	for _, m := range result.Data {
+	for _, m := range raw.Data {
 		id := strings.TrimSpace(m.ID)
-		if id != "" {
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				models = append(models, id)
-			}
+		if id == "" {
+			continue
 		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		item := ModelDiscoveryItem{
+			ID:          id,
+			Name:        m.Name,
+			Description: truncate(m.Description, 120),
+			ContextLen:  m.ContextLen,
+			Provider:    extractProvider(id),
+		}
+		if m.Pricing != nil {
+			item.PricePrompt = formatPricePer1M(m.Pricing.Prompt)
+			item.PriceOutput = formatPricePer1M(m.Pricing.Completion)
+			item.IsFree = m.Pricing.Prompt == "0" && m.Pricing.Completion == "0"
+		}
+		items = append(items, item)
 	}
-	for _, m := range result.Models {
+
+	// Fallback: plain models list
+	for _, m := range raw.Models {
 		id := strings.TrimSpace(m.ID)
 		if id == "" {
 			id = strings.TrimSpace(m.Name)
 		}
-		if id != "" {
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				models = append(models, id)
-			}
+		if id == "" {
+			continue
 		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		items = append(items, ModelDiscoveryItem{
+			ID:       id,
+			Name:     m.Name,
+			Provider: extractProvider(id),
+		})
 	}
 
-	sort.Strings(models)
-	return models, nil
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ID < items[j].ID
+	})
+	return items, nil
 }
 
-// discoverOllamaModels fetches models from Ollama's /api/tags endpoint.
-func discoverOllamaModels(ctx context.Context, apiBase string) ([]string, error) {
+// discoverOllamaModelItems fetches models from Ollama's /api/tags endpoint.
+func discoverOllamaModelItems(ctx context.Context, apiBase string) ([]ModelDiscoveryItem, error) {
 	if apiBase == "" {
 		apiBase = "http://localhost:11434"
 	}
-	// Ollama uses /api/tags, not /v1/models
-	base := strings.TrimSuffix(apiBase, "/v1")
-	base = strings.TrimSuffix(base, "/v1/")
+	base := strings.TrimSuffix(strings.TrimSuffix(apiBase, "/v1/"), "/v1")
 
 	url := base + "/api/tags"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -183,28 +226,41 @@ func discoverOllamaModels(ctx context.Context, apiBase string) ([]string, error)
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	// Ollama format: { "models": [{ "name": "llama3:latest" }, ...] }
 	var result struct {
 		Models []struct {
-			Name string `json:"name"`
+			Name    string `json:"name"`
+			Details *struct {
+				Family string `json:"family"`
+			} `json:"details"`
 		} `json:"models"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	models := make([]string, 0, len(result.Models))
+	items := make([]ModelDiscoveryItem, 0, len(result.Models))
 	for _, m := range result.Models {
-		if name := strings.TrimSpace(m.Name); name != "" {
-			models = append(models, name)
+		name := strings.TrimSpace(m.Name)
+		if name == "" {
+			continue
 		}
+		item := ModelDiscoveryItem{
+			ID:       name,
+			Name:     name,
+			Provider: "ollama",
+			IsFree:   true,
+		}
+		if m.Details != nil && m.Details.Family != "" {
+			item.Provider = m.Details.Family
+		}
+		items = append(items, item)
 	}
-	sort.Strings(models)
-	return models, nil
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	return items, nil
 }
 
-// discoverAnthropicModels fetches models from Anthropic's /v1/models endpoint.
-func discoverAnthropicModels(ctx context.Context, apiBase, apiKey string) ([]string, error) {
+// discoverAnthropicModelItems fetches models from Anthropic's /v1/models endpoint.
+func discoverAnthropicModelItems(ctx context.Context, apiBase, apiKey string) ([]ModelDiscoveryItem, error) {
 	if apiBase == "" {
 		apiBase = "https://api.anthropic.com"
 	}
@@ -239,22 +295,61 @@ func discoverAnthropicModels(ctx context.Context, apiBase, apiKey string) ([]str
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	// Anthropic format: { "data": [{ "id": "claude-3-5-sonnet-20241022" }, ...] }
 	var result struct {
 		Data []struct {
-			ID string `json:"id"`
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	models := make([]string, 0, len(result.Data))
+	items := make([]ModelDiscoveryItem, 0, len(result.Data))
 	for _, m := range result.Data {
 		if id := strings.TrimSpace(m.ID); id != "" {
-			models = append(models, id)
+			items = append(items, ModelDiscoveryItem{
+				ID:       id,
+				Name:     m.DisplayName,
+				Provider: "anthropic",
+			})
 		}
 	}
-	sort.Strings(models)
-	return models, nil
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	return items, nil
+}
+
+// extractProvider extracts the provider name from a model ID like "openai/gpt-4".
+func extractProvider(id string) string {
+	if idx := strings.Index(id, "/"); idx > 0 {
+		return id[:idx]
+	}
+	return ""
+}
+
+// formatPricePer1M converts a per-token price string to a per-1M-token price string.
+// Input: "0.000003" (per token) → Output: "$3.00"
+func formatPricePer1M(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "0" {
+		return "Free"
+	}
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil || f == 0 {
+		return "Free"
+	}
+	per1M := f * 1_000_000
+	if per1M < 0.01 {
+		return fmt.Sprintf("$%.4f", per1M)
+	}
+	return fmt.Sprintf("$%.2f", per1M)
+}
+
+// truncate shortens a string to maxLen characters, adding "…" if truncated.
+func truncate(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…"
 }
