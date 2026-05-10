@@ -378,7 +378,7 @@ export function AddModelSheet({
                         setShowModelDropdown(true)
                       }}
                       onFocus={() => setShowModelDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowModelDropdown(false), 150)}
+                      onBlur={() => setShowModelDropdown(false)}
                       placeholder={t("models.add.modelIdPlaceholder")}
                       className="font-mono text-sm"
                       aria-invalid={!!fieldErrors.model}
@@ -429,8 +429,11 @@ export function AddModelSheet({
                           key={modelId}
                           type="button"
                           className="hover:bg-accent w-full px-3 py-2 text-left font-mono text-sm"
-                          onMouseDown={(e) => {
+                          onPointerDown={(e) => {
+                            // Prevent input onBlur from firing before we handle the click
                             e.preventDefault()
+                          }}
+                          onClick={() => {
                             setForm((f) => ({ ...f, model: modelId }))
                             setShowModelDropdown(false)
                             if (fieldErrors.model) {
