@@ -207,7 +207,8 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	// Start analytics collector — non-fatal if it fails
 	analyticsDir := filepath.Join(config.GetHome(), "analytics")
 	if analyticsStore, err := analytics.NewStore(analyticsDir); err == nil {
-		if collector, err := analytics.NewCollector(ctx, agentLoop.RuntimeEventBus(), analyticsStore); err == nil {
+		analyticsCtx := context.Background()
+		if collector, err := analytics.NewCollector(analyticsCtx, agentLoop.RuntimeEventBus(), analyticsStore); err == nil {
 			defer collector.Close()
 			defer analyticsStore.Close()
 			logger.DebugCF("analytics", "collector started", map[string]any{"dir": analyticsDir})
