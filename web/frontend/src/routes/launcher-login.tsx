@@ -7,6 +7,7 @@ import {
   getLauncherAuthStatus,
   postLauncherDashboardLogin,
 } from "@/api/launcher-auth"
+import { ParticlesBackground } from "@/components/particles-background"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -79,7 +80,8 @@ function LauncherLoginPage() {
   }
 
   return (
-    <div className="bg-background text-foreground flex min-h-dvh flex-col">
+    <div className="bg-background text-foreground relative flex min-h-dvh flex-col overflow-hidden">
+      <ParticlesBackground />
       <header className="border-border/50 flex h-14 shrink-0 items-center justify-end gap-2 border-b px-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
