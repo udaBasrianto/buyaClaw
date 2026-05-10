@@ -121,6 +121,7 @@ export interface ModelDiscoveryItem {
   price_prompt?: string
   price_output?: string
   is_free?: boolean
+  expiration_date?: string // promo end date YYYY-MM-DD
 }
 
 export async function fetchAvailableModels(

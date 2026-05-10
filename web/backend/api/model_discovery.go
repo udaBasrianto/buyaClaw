@@ -16,14 +16,15 @@ const modelDiscoveryTimeout = 5 * time.Second
 
 // ModelDiscoveryItem is a rich model entry returned by the discovery endpoint.
 type ModelDiscoveryItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name,omitempty"`
-	Provider    string `json:"provider,omitempty"`
-	Description string `json:"description,omitempty"`
-	ContextLen  int    `json:"context_length,omitempty"`
-	PricePrompt string `json:"price_prompt,omitempty"` // price per 1M tokens input (USD)
-	PriceOutput string `json:"price_output,omitempty"` // price per 1M tokens output (USD)
-	IsFree      bool   `json:"is_free,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name,omitempty"`
+	Provider       string `json:"provider,omitempty"`
+	Description    string `json:"description,omitempty"`
+	ContextLen     int    `json:"context_length,omitempty"`
+	PricePrompt    string `json:"price_prompt,omitempty"`    // price per 1M tokens input (USD)
+	PriceOutput    string `json:"price_output,omitempty"`    // price per 1M tokens output (USD)
+	IsFree         bool   `json:"is_free,omitempty"`
+	ExpirationDate string `json:"expiration_date,omitempty"` // promo end date YYYY-MM-DD
 }
 
 // handleFetchAvailableModels fetches the list of models available from a
@@ -121,19 +122,19 @@ func discoverOpenAICompatibleModelItems(ctx context.Context, apiBase, apiKey str
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	// OpenRouter / OpenAI format:
-	// { "data": [{ "id": "openai/gpt-4", "name": "GPT-4", "pricing": {...}, ... }] }
+	// OpenRouter / OpenAI / Sumopod format:
+	// { "data": [{ "id": "openai/gpt-4", "name": "GPT-4", "pricing": {...}, "expiration_date": "2026-06-01", ... }] }
 	var raw struct {
 		Data []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			ContextLen  int    `json:"context_length"`
-			Pricing     *struct {
+			ID             string `json:"id"`
+			Name           string `json:"name"`
+			Description    string `json:"description"`
+			ContextLen     int    `json:"context_length"`
+			ExpirationDate string `json:"expiration_date"`
+			Pricing        *struct {
 				Prompt     string `json:"prompt"`
 				Completion string `json:"completion"`
 			} `json:"pricing"`
-			// Some providers use "models" key
 		} `json:"data"`
 		Models []struct {
 			ID   string `json:"id"`
@@ -158,11 +159,12 @@ func discoverOpenAICompatibleModelItems(ctx context.Context, apiBase, apiKey str
 		seen[id] = struct{}{}
 
 		item := ModelDiscoveryItem{
-			ID:          id,
-			Name:        m.Name,
-			Description: truncate(m.Description, 120),
-			ContextLen:  m.ContextLen,
-			Provider:    extractProvider(id),
+			ID:             id,
+			Name:           m.Name,
+			Description:    truncate(m.Description, 120),
+			ContextLen:     m.ContextLen,
+			Provider:       extractProvider(id),
+			ExpirationDate: m.ExpirationDate,
 		}
 		if m.Pricing != nil {
 			item.PricePrompt = formatPricePer1M(m.Pricing.Prompt)

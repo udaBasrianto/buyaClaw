@@ -738,7 +738,12 @@ function ModelTable({ models, search, onSearch, onSelect }: ModelTableProps) {
                       Free
                     </span>
                   )}
-                  {!m.is_free && m.price_prompt && m.price_prompt !== "Free" && (
+                  {!m.is_free && m.expiration_date && (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                      Promo · Until {m.expiration_date}
+                    </span>
+                  )}
+                  {!m.is_free && !m.expiration_date && m.price_prompt && m.price_prompt !== "Free" && (
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
                       {m.price_prompt} / 1M in
                     </span>
@@ -752,6 +757,9 @@ function ModelTable({ models, search, onSearch, onSelect }: ModelTableProps) {
                 {m.context_length && m.context_length > 0 && (
                   <span className="text-muted-foreground text-xs">
                     {(m.context_length / 1000).toFixed(0)}K ctx
+                    {!m.is_free && m.price_prompt && m.price_prompt !== "Free" && (
+                      <> · {m.price_prompt}/1M in · {m.price_output}/1M out</>
+                    )}
                   </span>
                 )}
               </div>
