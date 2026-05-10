@@ -107,4 +107,25 @@ export async function setDefaultModel(
   return response
 }
 
+export interface AvailableModelsResponse {
+  models: string[]
+  error?: string
+}
+
+export async function fetchAvailableModels(
+  provider: string,
+  apiBase: string,
+  apiKey: string,
+): Promise<AvailableModelsResponse> {
+  const res = await launcherFetch("/api/models/available", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, api_base: apiBase, api_key: apiKey }),
+  })
+  if (!res.ok) {
+    return { models: [], error: `Request failed: ${res.status}` }
+  }
+  return res.json() as Promise<AvailableModelsResponse>
+}
+
 export type { ModelsListResponse, ModelActionResponse }

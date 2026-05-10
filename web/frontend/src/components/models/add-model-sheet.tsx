@@ -1,10 +1,11 @@
-import { IconLoader2 } from "@tabler/icons-react"
-import { useEffect, useMemo, useState } from "react"
+import { IconLoader2, IconRefresh } from "@tabler/icons-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
   type ModelProviderOption,
   addModel,
+  fetchAvailableModels,
   setDefaultModel,
 } from "@/api/models"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
@@ -106,6 +107,13 @@ export function AddModelSheet({
     Partial<Record<keyof AddForm, string>>
   >({})
   const [serverError, setServerError] = useState("")
+
+  // Auto-fetch model list state
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [fetchingModels, setFetchingModels] = useState(false)
+  const [modelFetchError, setModelFetchError] = useState<string | null>(null)
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const apiKeyPlaceholder = maskedSecretPlaceholder(
     form.apiKey,
     t("models.field.apiKeyPlaceholder"),
@@ -150,8 +158,50 @@ export function AddModelSheet({
       setSetAsDefault(false)
       setFieldErrors({})
       setServerError("")
+      setAvailableModels([])
+      setModelFetchError(null)
+      setFetchingModels(false)
     }
   }, [open])
+
+  // Debounced auto-fetch when apiBase or apiKey changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    const apiBase = form.apiBase.trim()
+    const apiKey = form.apiKey.trim()
+
+    // Need at least apiBase to fetch (some providers allow empty key)
+    if (!apiBase) {
+      setAvailableModels([])
+      setModelFetchError(null)
+      return
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setFetchingModels(true)
+      setModelFetchError(null)
+      try {
+        const result = await fetchAvailableModels(form.provider, apiBase, apiKey)
+        if (result.error) {
+          setModelFetchError(result.error)
+          setAvailableModels([])
+        } else {
+          setAvailableModels(result.models ?? [])
+          setModelFetchError(null)
+        }
+      } catch {
+        setModelFetchError("Failed to fetch models")
+        setAvailableModels([])
+      } finally {
+        setFetchingModels(false)
+      }
+    }, 600)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [form.apiBase, form.apiKey, form.provider])
 
   const validate = (): boolean => {
     const errors: Partial<Record<keyof AddForm, string>> = {}
@@ -318,13 +368,99 @@ export function AddModelSheet({
               label={t("models.add.modelId")}
               hint={t("models.add.modelIdHint")}
             >
-              <Input
-                value={form.model}
-                onChange={setField("model")}
-                placeholder={t("models.add.modelIdPlaceholder")}
-                className="font-mono text-sm"
-                aria-invalid={!!fieldErrors.model}
-              />
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      value={form.model}
+                      onChange={(e) => {
+                        setField("model")(e)
+                        setShowModelDropdown(true)
+                      }}
+                      onFocus={() => setShowModelDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowModelDropdown(false), 150)}
+                      placeholder={t("models.add.modelIdPlaceholder")}
+                      className="font-mono text-sm"
+                      aria-invalid={!!fieldErrors.model}
+                      autoComplete="off"
+                    />
+                    {fetchingModels && (
+                      <IconLoader2 className="text-muted-foreground absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin" />
+                    )}
+                  </div>
+                  {availableModels.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Refresh model list"
+                      onClick={async () => {
+                        setFetchingModels(true)
+                        setModelFetchError(null)
+                        try {
+                          const result = await fetchAvailableModels(
+                            form.provider,
+                            form.apiBase.trim(),
+                            form.apiKey.trim(),
+                          )
+                          setAvailableModels(result.models ?? [])
+                          if (result.error) setModelFetchError(result.error)
+                        } finally {
+                          setFetchingModels(false)
+                        }
+                      }}
+                    >
+                      <IconRefresh className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Dropdown list */}
+                {showModelDropdown && availableModels.length > 0 && (
+                  <div className="border-border bg-popover absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border shadow-md">
+                    {availableModels
+                      .filter(
+                        (m) =>
+                          !form.model ||
+                          m.toLowerCase().includes(form.model.toLowerCase()),
+                      )
+                      .map((modelId) => (
+                        <button
+                          key={modelId}
+                          type="button"
+                          className="hover:bg-accent w-full px-3 py-2 text-left font-mono text-sm"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            setForm((f) => ({ ...f, model: modelId }))
+                            setShowModelDropdown(false)
+                            if (fieldErrors.model) {
+                              setFieldErrors((prev) => ({ ...prev, model: undefined }))
+                            }
+                          }}
+                        >
+                          {modelId}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Status messages */}
+              {!fetchingModels && availableModels.length > 0 && !modelFetchError && (
+                <p className="text-muted-foreground text-xs">
+                  ✓ {availableModels.length} models available — click to select or type manually
+                </p>
+              )}
+              {!fetchingModels && modelFetchError && (
+                <p className="text-muted-foreground text-xs">
+                  ⚠ {modelFetchError} — you can still type the model ID manually
+                </p>
+              )}
+              {!fetchingModels && !modelFetchError && availableModels.length === 0 && form.apiBase.trim() && (
+                <p className="text-muted-foreground text-xs">
+                  No models found — type the model ID manually
+                </p>
+              )}
               {fieldErrors.model && (
                 <p className="text-destructive text-xs">{fieldErrors.model}</p>
               )}
