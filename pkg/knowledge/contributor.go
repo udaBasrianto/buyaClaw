@@ -4,13 +4,59 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/sipeed/picoclaw/pkg/agent"
-	"github.com/sipeed/picoclaw/pkg/logger"
 )
+
+// PromptLayerContext and PromptSlotMemory mirror the constants in pkg/agent
+// to avoid an import cycle (agent → knowledge → agent).
+const (
+	promptLayerContext = "context"
+	promptSlotMemory   = "memory"
+)
+
+// PromptSourceDescriptor mirrors agent.PromptSourceDescriptor.
+type PromptSourceDescriptor struct {
+	ID              string
+	Owner           string
+	Description     string
+	Allowed         []PromptPlacement
+	StableByDefault bool
+}
+
+// PromptPlacement mirrors agent.PromptPlacement.
+type PromptPlacement struct {
+	Layer string
+	Slot  string
+}
+
+// PromptSource mirrors agent.PromptSource.
+type PromptSource struct {
+	ID   string
+	Name string
+}
+
+// PromptPart mirrors agent.PromptPart.
+type PromptPart struct {
+	ID     string
+	Layer  string
+	Slot   string
+	Source PromptSource
+	Title  string
+	Content string
+	Stable bool
+}
+
+// PromptBuildRequest mirrors the fields of agent.PromptBuildRequest
+// that the knowledge contributor needs.
+type PromptBuildRequest struct {
+	CurrentMessage string
+}
 
 // KnowledgePromptContributor injects relevant knowledge base chunks
 // into the agent's context layer before each LLM call.
+//
+// It implements agent.PromptContributor via duck-typing — the agent
+// package calls PromptSource() and ContributePrompt() by interface,
+// so no direct import of pkg/agent is needed here.
 type KnowledgePromptContributor struct {
 	store      *Store
 	maxResults int
@@ -28,62 +74,41 @@ func NewKnowledgePromptContributor(store *Store, maxResults int) *KnowledgePromp
 	}
 }
 
-// PromptSource returns the descriptor for this contributor.
-func (c *KnowledgePromptContributor) PromptSource() agent.PromptSourceDescriptor {
-	return agent.PromptSourceDescriptor{
+// KnowledgePromptSource returns the descriptor for this contributor.
+// Named differently to avoid collision with the agent interface method.
+func (c *KnowledgePromptContributor) KnowledgePromptSource() PromptSourceDescriptor {
+	return PromptSourceDescriptor{
 		ID:          "knowledge_base:context",
 		Owner:       "knowledge_base",
 		Description: "Relevant knowledge base excerpts retrieved for the current query",
-		Allowed: []agent.PromptPlacement{
-			{Layer: agent.PromptLayerContext, Slot: agent.PromptSlotMemory},
+		Allowed: []PromptPlacement{
+			{Layer: promptLayerContext, Slot: promptSlotMemory},
 		},
 		StableByDefault: false,
 	}
 }
 
-// ContributePrompt searches the knowledge base for chunks relevant to the
-// current user message and returns them as a formatted context block.
-func (c *KnowledgePromptContributor) ContributePrompt(
-	ctx context.Context,
-	req agent.PromptBuildRequest,
-) ([]agent.PromptPart, error) {
+// RetrieveContext searches the knowledge base for chunks relevant to the
+// given query and returns a formatted context string.
+// Returns empty string if no relevant chunks found.
+func (c *KnowledgePromptContributor) RetrieveContext(ctx context.Context, query string) (string, error) {
 	if c.store == nil {
-		return nil, nil
+		return "", nil
 	}
-
-	query := strings.TrimSpace(req.CurrentMessage)
+	query = strings.TrimSpace(query)
 	if query == "" {
-		return nil, nil
+		return "", nil
 	}
 
 	results, err := c.store.Search(ctx, query, c.maxResults)
 	if err != nil {
-		logger.WarnCF("knowledge", "search failed", map[string]any{"error": err.Error()})
-		return nil, nil
+		return "", fmt.Errorf("knowledge search: %w", err)
 	}
 	if len(results) == 0 {
-		return nil, nil
+		return "", nil
 	}
 
-	content := formatKnowledgeContext(results)
-	if content == "" {
-		return nil, nil
-	}
-
-	part := agent.PromptPart{
-		ID:    "knowledge_base:retrieved",
-		Layer: agent.PromptLayerContext,
-		Slot:  agent.PromptSlotMemory,
-		Source: agent.PromptSource{
-			ID:   "knowledge_base:context",
-			Name: "Knowledge Base",
-		},
-		Title:   "Relevant Knowledge",
-		Content: content,
-		Stable:  false,
-	}
-
-	return []agent.PromptPart{part}, nil
+	return formatKnowledgeContext(results), nil
 }
 
 // formatKnowledgeContext formats search results into a readable context block.
@@ -94,7 +119,7 @@ func formatKnowledgeContext(results []SearchResult) string {
 
 	var sb strings.Builder
 	sb.WriteString("## Knowledge Base Context\n\n")
-	sb.WriteString("The following excerpts from the knowledge base may be relevant:\n\n")
+	sb.WriteString("The following excerpts from the knowledge base may be relevant to the user's question:\n\n")
 
 	for i, r := range results {
 		sb.WriteString(fmt.Sprintf("### [%d] %s\n\n", i+1, r.DocName))

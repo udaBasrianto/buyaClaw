@@ -10,6 +10,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/isolation"
+	"github.com/sipeed/picoclaw/pkg/knowledge"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/memory"
@@ -128,6 +129,25 @@ func NewAgentInstance(
 			mcpDiscoveryActive && cfg.Tools.MCP.Discovery.UseRegex,
 		).
 		WithSplitOnMarker(cfg.Agents.Defaults.SplitOnMarker)
+
+	// Register knowledge base prompt contributor so the agent automatically
+	// retrieves relevant document chunks for each user message.
+	knowledgeDir := filepath.Join(config.GetHome(), "knowledge")
+	if knowledgeStore, err := knowledge.NewStore(knowledgeDir); err == nil {
+		contributor := NewKnowledgeContributor(
+			knowledge.NewKnowledgePromptContributor(knowledgeStore, 5),
+		)
+		if regErr := contextBuilder.RegisterPromptContributor(contributor); regErr != nil {
+			logger.WarnCF("knowledge", "failed to register knowledge contributor",
+				map[string]any{"error": regErr.Error()})
+		} else {
+			logger.DebugCF("knowledge", "knowledge base contributor registered",
+				map[string]any{"dir": knowledgeDir})
+		}
+	} else {
+		logger.WarnCF("knowledge", "failed to open knowledge store",
+			map[string]any{"error": err.Error()})
+	}
 
 	agentID := routing.DefaultAgentID
 	agentName := ""
