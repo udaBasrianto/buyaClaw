@@ -10,7 +10,6 @@ import {
 } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRef, useState } from "react"
-import { useTranslation } from "react-i18next"
 
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -29,7 +28,6 @@ import {
 } from "@/api/knowledge"
 
 export function KnowledgePage() {
-  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -101,10 +99,11 @@ export function KnowledgePage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <PageHeader
-        title="Knowledge Base"
-        description="Upload documents to give the AI agent persistent knowledge. Supported: PDF, Word, Excel, CSV, TXT, Markdown."
-      />
+      <PageHeader title="Knowledge Base">
+        <span className="text-muted-foreground text-sm">
+          Upload documents to give the AI agent persistent knowledge. Supported: PDF, Word, Excel, CSV, TXT, Markdown.
+        </span>
+      </PageHeader>
 
       {/* Upload Section */}
       <Card>
