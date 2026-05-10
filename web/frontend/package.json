@@ -20,7 +20,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@tabler/icons-react": "^3.43.0",
     "@tailwindcss/vite": "^4.2.4",
-    "@tanstack/react-query": "^5.99.0",
+    "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-router": "^1.169.2",
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tsparticles/react": "^3.0.0",
