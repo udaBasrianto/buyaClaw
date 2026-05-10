@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import Particles, { initParticlesEngine } from "@tsparticles/react"
 import { loadSlim } from "@tsparticles/slim"
-import type { ISourceOptions } from "@tsparticles/engine"
+import type { Container, ISourceOptions } from "@tsparticles/engine"
 
 const particlesOptions: ISourceOptions = {
   fullScreen: { enable: false },
@@ -51,19 +51,27 @@ export function ParticlesBackground() {
   useEffect(() => {
     initParticlesEngine(async (engine) => {
       await loadSlim(engine)
-    }).then(() => setInit(true))
+    }).then(() => {
+      setInit(true)
+    })
   }, [])
 
-  const particlesLoaded = useCallback(async () => {}, [])
+  const particlesLoaded = useCallback(async (_container?: Container) => {}, [])
 
   if (!init) return null
 
   return (
     <Particles
       id="tsparticles"
-      className="absolute inset-0 -z-10"
       particlesLoaded={particlesLoaded}
       options={particlesOptions}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 0,
+        width: "100%",
+        height: "100%",
+      }}
     />
   )
 }
