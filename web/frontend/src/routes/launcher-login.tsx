@@ -33,7 +33,6 @@ function LauncherLoginPage() {
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
 
-  // If the password store has never been initialized, go to setup instead.
   React.useEffect(() => {
     void getLauncherAuthStatus()
       .then((s) => {
@@ -41,9 +40,7 @@ function LauncherLoginPage() {
           globalThis.location.assign("/launcher-setup")
         }
       })
-      .catch(() => {
-        /* network error — stay on login page */
-      })
+      .catch(() => {})
   }, [])
 
   const loginWithPassword = React.useCallback(
@@ -80,11 +77,29 @@ function LauncherLoginPage() {
   }
 
   return (
-    <div className="text-foreground relative flex min-h-dvh flex-col overflow-hidden">
-      <ParticlesBackground />
+    <>
+      {/* Layer 0 — particles fill the entire viewport */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+        }}
+      >
+        <ParticlesBackground />
+      </div>
 
-      {/* Header — top right */}
-      <header className="fixed right-4 top-4 z-10 flex items-center gap-2">
+      {/* Layer 1 — header buttons top-right */}
+      <div
+        style={{
+          position: "fixed",
+          top: 16,
+          right: 16,
+          zIndex: 20,
+          display: "flex",
+          gap: 8,
+        }}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" aria-label="Language">
@@ -113,45 +128,58 @@ function LauncherLoginPage() {
             <IconMoon className="size-4" />
           )}
         </Button>
-      </header>
-
-      {/* Center — login card */}
-      <div className="relative z-10 flex min-h-dvh items-center justify-center p-4">
-        <Card className="w-full max-w-md" size="sm">
-          <CardHeader>
-            <CardTitle>{t("launcherLogin.title")}</CardTitle>
-            <CardDescription>{t("launcherLogin.description")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="launcher-password">
-                  {t("launcherLogin.passwordLabel")}
-                </Label>
-                <Input
-                  id="launcher-password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t("launcherLogin.passwordPlaceholder")}
-                />
-              </div>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? t("labels.loading") : t("launcherLogin.submit")}
-              </Button>
-              {error ? (
-                <p className="text-destructive text-sm" role="alert">
-                  {error}
-                </p>
-              ) : null}
-            </form>
-          </CardContent>
-        </Card>
       </div>
-    </div>
+
+      {/* Layer 2 — login card perfectly centered */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          pointerEvents: "none", // let particles receive mouse events
+        }}
+      >
+        <div style={{ pointerEvents: "auto", width: "100%", maxWidth: 448 }}>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>{t("launcherLogin.title")}</CardTitle>
+              <CardDescription>{t("launcherLogin.description")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="launcher-password">
+                    {t("launcherLogin.passwordLabel")}
+                  </Label>
+                  <Input
+                    id="launcher-password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t("launcherLogin.passwordPlaceholder")}
+                  />
+                </div>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? t("labels.loading") : t("launcherLogin.submit")}
+                </Button>
+                {error ? (
+                  <p className="text-destructive text-sm" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
   )
 }
 
