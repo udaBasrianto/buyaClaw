@@ -6,9 +6,19 @@ import (
 	"strings"
 )
 
-// PromptLayerContext and PromptSlotMemory mirror the constants in pkg/agent
-// to avoid an import cycle (agent → knowledge → agent).
 const (
+	// maxKnowledgeResults is the maximum number of chunks injected per turn.
+	// Keep low to avoid 413 errors from providers with small request limits.
+	maxKnowledgeResults = 3
+
+	// maxChunkInjectLen is the maximum characters per chunk injected into context.
+	maxChunkInjectLen = 400
+
+	// maxTotalKnowledgeLen is the hard cap on total injected knowledge text.
+	maxTotalKnowledgeLen = 1500
+
+	// promptLayerContext and promptSlotMemory mirror pkg/agent constants
+	// to avoid an import cycle (agent → knowledge → agent).
 	promptLayerContext = "context"
 	promptSlotMemory   = "memory"
 )
@@ -65,8 +75,8 @@ type KnowledgePromptContributor struct {
 // NewKnowledgePromptContributor creates a contributor that queries the store
 // for relevant chunks and injects them into PromptLayerContext/PromptSlotMemory.
 func NewKnowledgePromptContributor(store *Store, maxResults int) *KnowledgePromptContributor {
-	if maxResults <= 0 {
-		maxResults = 5
+	if maxResults <= 0 || maxResults > maxKnowledgeResults {
+		maxResults = maxKnowledgeResults
 	}
 	return &KnowledgePromptContributor{
 		store:      store,
@@ -111,24 +121,36 @@ func (c *KnowledgePromptContributor) RetrieveContext(ctx context.Context, query 
 	return formatKnowledgeContext(results), nil
 }
 
-// formatKnowledgeContext formats search results into a readable context block.
+// formatKnowledgeContext formats search results into a compact context block.
+// Each chunk is truncated to maxChunkInjectLen chars and total output is
+// capped at maxTotalKnowledgeLen to avoid 413 errors from providers.
 func formatKnowledgeContext(results []SearchResult) string {
 	if len(results) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## Knowledge Base Context\n\n")
-	sb.WriteString("The following excerpts from the knowledge base may be relevant to the user's question:\n\n")
+	sb.WriteString("## Knowledge Base\n\n")
 
+	totalLen := 0
 	for i, r := range results {
-		sb.WriteString(fmt.Sprintf("### [%d] %s\n\n", i+1, r.DocName))
-		sb.WriteString(r.Chunk.Content)
-		sb.WriteString("\n\n")
+		chunk := strings.TrimSpace(r.Chunk.Content)
+
+		// Truncate individual chunk
+		if len(chunk) > maxChunkInjectLen {
+			chunk = chunk[:maxChunkInjectLen] + "…"
+		}
+
+		entry := fmt.Sprintf("[%d] %s\n%s\n\n", i+1, r.DocName, chunk)
+
+		// Stop if adding this entry would exceed total cap
+		if totalLen+len(entry) > maxTotalKnowledgeLen {
+			break
+		}
+
+		sb.WriteString(entry)
+		totalLen += len(entry)
 	}
 
-	sb.WriteString("---\n")
-	sb.WriteString("*Use the above context to inform your response when relevant.*\n")
-
-	return sb.String()
+	return strings.TrimRight(sb.String(), "\n")
 }
