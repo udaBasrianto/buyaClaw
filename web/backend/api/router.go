@@ -110,6 +110,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Knowledge base (RAG)
 	h.registerKnowledgeRoutes(mux)
+
+	// Analytics dashboard
+	h.registerAnalyticsRoutes(mux)
 }
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.

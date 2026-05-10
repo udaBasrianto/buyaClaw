@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/agent"
+	"github.com/sipeed/picoclaw/pkg/analytics"
 	"github.com/sipeed/picoclaw/pkg/audio/asr"
 	"github.com/sipeed/picoclaw/pkg/audio/tts"
 	"github.com/sipeed/picoclaw/pkg/bus"
@@ -202,6 +203,16 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
 	msgBus.SetEventPublisher(agentLoop.RuntimeEventBus())
 	publishGatewayEvent(agentLoop, runtimeevents.KindGatewayStart, startedAt, nil)
+
+	// Start analytics collector — non-fatal if it fails
+	analyticsDir := filepath.Join(config.GetHome(), "analytics")
+	if analyticsStore, err := analytics.NewStore(analyticsDir); err == nil {
+		if collector, err := analytics.NewCollector(ctx, agentLoop.RuntimeEventBus(), analyticsStore); err == nil {
+			defer collector.Close()
+			defer analyticsStore.Close()
+			logger.DebugCF("analytics", "collector started", map[string]any{"dir": analyticsDir})
+		}
+	}
 
 	fmt.Println("\n📦 Agent Status:")
 	startupInfo := agentLoop.GetStartupInfo()

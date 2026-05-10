@@ -2,6 +2,7 @@ import { IconChevronRight } from "@tabler/icons-react"
 import {
   IconAtom,
   IconBook2,
+  IconChartBar,
   IconChevronsDown,
   IconChevronsUp,
   IconKey,
@@ -173,6 +174,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/logs",
             icon: IconListDetails,
             translateTitle: true,
+          },
+          {
+            title: "Analytics",
+            url: "/analytics",
+            icon: IconChartBar,
+            translateTitle: false,
           },
         ],
       },
