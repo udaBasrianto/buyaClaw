@@ -44,7 +44,7 @@ cp -r "$DIR/web/frontend/dist" "$DIR/web/backend/dist" || fail "Copy dist gagal"
 # 4. Build binary Go
 cd "$DIR"
 log "Building picoclaw binary..."
-go build -o picoclaw ./cmd/picoclaw/ || fail "Build picoclaw gagal"
+go build -tags whatsapp_native -o picoclaw ./cmd/picoclaw/ || fail "Build picoclaw gagal"
 
 log "Building picoclaw-launcher binary..."
 go build -o picoclaw-launcher ./web/backend/ || fail "Build picoclaw-launcher gagal"
