@@ -27,6 +27,7 @@ cd "$DIR" || fail "Direktori $DIR tidak ditemukan"
 
 # 1. Pull update terbaru
 log "Pulling update dari GitHub..."
+git checkout -- web/frontend/src/routeTree.gen.ts 2>/dev/null || true
 git pull origin main || fail "Git pull gagal"
 
 # 2. Build frontend
