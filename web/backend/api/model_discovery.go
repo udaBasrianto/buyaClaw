@@ -48,6 +48,14 @@ func (h *Handler) handleFetchAvailableModels(w http.ResponseWriter, r *http.Requ
 	apiBase := strings.TrimRight(strings.TrimSpace(req.APIBase), "/")
 	apiKey := strings.TrimSpace(req.APIKey)
 
+	// SSRF protection: only allow HTTPS URLs (or localhost for local models)
+	if apiBase != "" && !isAllowedDiscoveryURL(apiBase) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "api_base must use HTTPS or be a localhost URL",
+		})
+		return
+	}
+
 	items, err := discoverModelItems(r.Context(), provider, apiBase, apiKey)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -354,4 +362,32 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "…"
+}
+
+// isAllowedDiscoveryURL validates that a URL is safe for model discovery.
+// Allows HTTPS URLs and localhost HTTP (for local models like Ollama/vLLM).
+// Blocks internal/private IP ranges to prevent SSRF.
+func isAllowedDiscoveryURL(rawURL string) bool {
+	lower := strings.ToLower(rawURL)
+
+	// Allow HTTPS always
+	if strings.HasPrefix(lower, "https://") {
+		return true
+	}
+
+	// Allow HTTP only for localhost
+	if strings.HasPrefix(lower, "http://") {
+		host := strings.TrimPrefix(lower, "http://")
+		// Remove path
+		if idx := strings.Index(host, "/"); idx >= 0 {
+			host = host[:idx]
+		}
+		// Remove port
+		if idx := strings.LastIndex(host, ":"); idx >= 0 {
+			host = host[:idx]
+		}
+		return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+	}
+
+	return false
 }

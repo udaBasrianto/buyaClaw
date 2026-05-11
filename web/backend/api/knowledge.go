@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sipeed/picoclaw/pkg/knowledge"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -19,20 +19,19 @@ const (
 	knowledgeDBDir   = "knowledge"
 )
 
-// knowledgeStore is a process-level singleton opened lazily.
-var knowledgeStore *knowledge.Store
+// knowledgeStore is a process-level singleton opened lazily via sync.Once.
+var (
+	knowledgeStore     *knowledge.Store
+	knowledgeStoreOnce sync.Once
+	knowledgeStoreErr  error
+)
 
 func getKnowledgeStore() (*knowledge.Store, error) {
-	if knowledgeStore != nil {
-		return knowledgeStore, nil
-	}
-	dir := filepath.Join(utils.GetPicoclawHome(), knowledgeDBDir)
-	store, err := knowledge.NewStore(dir)
-	if err != nil {
-		return nil, fmt.Errorf("open knowledge store: %w", err)
-	}
-	knowledgeStore = store
-	return store, nil
+	knowledgeStoreOnce.Do(func() {
+		dir := filepath.Join(utils.GetPicoclawHome(), knowledgeDBDir)
+		knowledgeStore, knowledgeStoreErr = knowledge.NewStore(dir)
+	})
+	return knowledgeStore, knowledgeStoreErr
 }
 
 // registerKnowledgeRoutes binds knowledge base endpoints to the mux.
@@ -279,6 +278,3 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 func GetKnowledgeStore() (*knowledge.Store, error) {
 	return getKnowledgeStore()
 }
-
-// ensure unused import doesn't cause error
-var _ = os.DevNull
