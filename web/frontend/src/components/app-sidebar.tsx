@@ -2,6 +2,7 @@ import { IconChevronRight } from "@tabler/icons-react"
 import {
   IconAtom,
   IconBook2,
+  IconBrandWhatsapp,
   IconChartBar,
   IconChevronsDown,
   IconChevronsUp,
@@ -123,12 +124,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         label: "navigation.channels_group",
         defaultOpen: true,
-        items: channelItems.map((item) => ({
-          title: item.title,
-          url: item.url,
-          icon: item.icon,
-          translateTitle: false,
-        })),
+        items: [
+          ...channelItems.map((item) => ({
+            title: item.title,
+            url: item.url,
+            icon: item.icon,
+            translateTitle: false,
+          })),
+          {
+            title: "WhatsApp QR",
+            url: "/whatsapp-qr",
+            icon: IconBrandWhatsapp,
+            translateTitle: false,
+          },
+        ],
         isChannelsGroup: true,
       },
       {

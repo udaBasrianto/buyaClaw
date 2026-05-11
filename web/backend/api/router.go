@@ -113,6 +113,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Analytics dashboard
 	h.registerAnalyticsRoutes(mux)
+
+	// WhatsApp QR login
+	h.registerWhatsAppRoutes(mux)
 }
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.

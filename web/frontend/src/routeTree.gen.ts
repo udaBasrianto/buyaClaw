@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as WhatsAppQRRouteImport } from './routes/whatsapp-qr'
 import { Route as LauncherSetupRouteImport } from './routes/launcher-setup'
 import { Route as LauncherLoginRouteImport } from './routes/launcher-login'
 import { Route as CredentialsRouteImport } from './routes/credentials'
@@ -39,6 +40,11 @@ const LogsRoute = LogsRouteImport.update({
 const AnalyticsRoute = AnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WhatsAppQRRoute = WhatsAppQRRouteImport.update({
+  id: '/whatsapp-qr',
+  path: '/whatsapp-qr',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LauncherSetupRoute = LauncherSetupRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/analytics': typeof AnalyticsRoute
+  '/whatsapp-qr': typeof WhatsAppQRRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/analytics': typeof AnalyticsRoute
+  '/whatsapp-qr': typeof WhatsAppQRRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/analytics': typeof AnalyticsRoute
+  '/whatsapp-qr': typeof WhatsAppQRRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/analytics'
+    | '/whatsapp-qr'
     | '/models'
     | '/agent/hub'
     | '/agent/skills'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/analytics'
+    | '/whatsapp-qr'
     | '/models'
     | '/agent/hub'
     | '/agent/skills'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/analytics'
+    | '/whatsapp-qr'
     | '/models'
     | '/agent/hub'
     | '/agent/skills'
@@ -229,6 +241,7 @@ export interface RootRouteChildren {
   LauncherSetupRoute: typeof LauncherSetupRoute
   LogsRoute: typeof LogsRoute
   AnalyticsRoute: typeof AnalyticsRoute
+  WhatsAppQRRoute: typeof WhatsAppQRRoute
   ModelsRoute: typeof ModelsRoute
 }
 
@@ -253,6 +266,13 @@ declare module '@tanstack/react-router' {
       path: '/analytics'
       fullPath: '/analytics'
       preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/whatsapp-qr': {
+      id: '/whatsapp-qr'
+      path: '/whatsapp-qr'
+      fullPath: '/whatsapp-qr'
+      preLoaderRoute: typeof WhatsAppQRRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/launcher-setup': {
@@ -398,6 +418,7 @@ const rootRouteChildren: RootRouteChildren = {
   LauncherSetupRoute: LauncherSetupRoute,
   LogsRoute: LogsRoute,
   AnalyticsRoute: AnalyticsRoute,
+  WhatsAppQRRoute: WhatsAppQRRoute,
   ModelsRoute: ModelsRoute,
 }
 export const routeTree = rootRouteImport
