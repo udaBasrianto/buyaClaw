@@ -333,8 +333,8 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 	if evt.Message == nil {
 		return
 	}
-	// Skip messages when bot is paused
-	if c.paused.Load() {
+	// Skip messages when bot is paused (check file-based state for cross-process support)
+	if c.paused.Load() || whatsappqr.Get().Status == "error" {
 		return
 	}
 	senderID := evt.Info.Sender.String()
@@ -445,7 +445,7 @@ func (c *WhatsAppNativeChannel) StartTyping(ctx context.Context, chatID string) 
 	}
 
 	// Send "composing" (typing indicator)
-	_ = client.SendChatPresence(to, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+	_ = client.SendChatPresence(ctx, to, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 
 	var once sync.Once
 	stop := func() {
@@ -454,7 +454,7 @@ func (c *WhatsAppNativeChannel) StartTyping(ctx context.Context, chatID string) 
 			cl := c.client
 			c.mu.Unlock()
 			if cl != nil && cl.IsConnected() {
-				_ = cl.SendChatPresence(to, types.ChatPresencePaused, types.ChatPresenceMediaText)
+				_ = cl.SendChatPresence(context.Background(), to, types.ChatPresencePaused, types.ChatPresenceMediaText)
 			}
 		})
 	}
