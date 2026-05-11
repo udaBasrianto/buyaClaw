@@ -62,6 +62,7 @@ type WhatsAppNativeChannel struct {
 	reconnecting bool
 	stopping     atomic.Bool
 	wg           sync.WaitGroup
+	paused       atomic.Bool // when true, incoming messages are ignored
 }
 
 func NewWhatsAppNativeChannel(
@@ -332,6 +333,10 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 	if evt.Message == nil {
 		return
 	}
+	// Skip messages when bot is paused
+	if c.paused.Load() {
+		return
+	}
 	senderID := evt.Info.Sender.String()
 	chatID := evt.Info.Chat.String()
 	content := evt.Message.GetConversation()
@@ -420,6 +425,62 @@ func parseJID(s string) (types.JID, error) {
 		return types.ParseJID(s)
 	}
 	return types.NewJID(s, types.DefaultUserServer), nil
+}
+
+// StartTyping implements channels.TypingCapable.
+// Sends "composing" presence to the chat and returns a stop function
+// that sends "paused" presence.
+func (c *WhatsAppNativeChannel) StartTyping(ctx context.Context, chatID string) (func(), error) {
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	if client == nil || !client.IsConnected() {
+		return func() {}, nil
+	}
+
+	to, err := parseJID(chatID)
+	if err != nil {
+		return func() {}, nil
+	}
+
+	// Send "composing" (typing indicator)
+	_ = client.SendChatPresence(to, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			c.mu.Lock()
+			cl := c.client
+			c.mu.Unlock()
+			if cl != nil && cl.IsConnected() {
+				_ = cl.SendChatPresence(to, types.ChatPresencePaused, types.ChatPresenceMediaText)
+			}
+		})
+	}
+
+	return stop, nil
+}
+
+// SetPaused pauses or resumes the bot. When paused, incoming messages are ignored.
+func (c *WhatsAppNativeChannel) SetPaused(paused bool) {
+	c.paused.Store(paused)
+	status := "resumed"
+	if paused {
+		status = "paused"
+	}
+	// Update QR state file to reflect pause status
+	if paused {
+		whatsappqr.SetError("Bot is paused")
+	} else {
+		whatsappqr.SetConnected("")
+	}
+	logger.InfoCF("whatsapp", "WhatsApp bot "+status, nil)
+}
+
+// IsPaused returns whether the bot is currently paused.
+func (c *WhatsAppNativeChannel) IsPaused() bool {
+	return c.paused.Load()
 }
 
 // generateQRDataURI encodes a QR code string as a PNG data URI.

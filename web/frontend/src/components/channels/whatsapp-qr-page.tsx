@@ -5,16 +5,19 @@ import {
   IconRefresh,
   IconAlertCircle,
   IconClock,
+  IconPlayerPause,
+  IconPlayerPlay,
 } from "@tabler/icons-react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getWhatsAppQRStatus, type WhatsAppQRState } from "@/api/whatsapp"
+import { getWhatsAppQRStatus, setWhatsAppPaused, type WhatsAppQRState } from "@/api/whatsapp"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function WhatsAppQRPage() {
+  const queryClient = useQueryClient()
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["whatsapp-qr"],
     queryFn: getWhatsAppQRStatus,
@@ -27,19 +30,51 @@ export function WhatsAppQRPage() {
     },
   })
 
+  const isPaused = data?.status === "error" && data?.error?.includes("paused")
+
+  const pauseMutation = useMutation({
+    mutationFn: (paused: boolean) => setWhatsAppPaused(paused),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-qr"] })
+    },
+  })
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader title="WhatsApp">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="gap-2"
-        >
-          <IconRefresh className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {data?.status === "connected" || isPaused ? (
+            <Button
+              variant={isPaused ? "default" : "outline"}
+              size="sm"
+              onClick={() => pauseMutation.mutate(!isPaused)}
+              disabled={pauseMutation.isPending}
+              className="gap-2"
+            >
+              {isPaused ? (
+                <>
+                  <IconPlayerPlay className="h-4 w-4" />
+                  Resume Bot
+                </>
+              ) : (
+                <>
+                  <IconPlayerPause className="h-4 w-4" />
+                  Pause Bot
+                </>
+              )}
+            </Button>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="gap-2"
+          >
+            <IconRefresh className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </PageHeader>
 
       <Card className="mx-auto w-full max-w-md">

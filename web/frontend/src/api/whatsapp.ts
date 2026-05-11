@@ -14,3 +14,12 @@ export async function getWhatsAppQRStatus(): Promise<WhatsAppQRState> {
   if (!res.ok) throw new Error(`WhatsApp API error: ${res.status}`)
   return res.json()
 }
+
+export async function setWhatsAppPaused(paused: boolean): Promise<void> {
+  const res = await launcherFetch("/api/whatsapp/pause", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paused }),
+  })
+  if (!res.ok) throw new Error(`WhatsApp pause error: ${res.status}`)
+}
